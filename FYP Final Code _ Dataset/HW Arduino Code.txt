@@ -1,0 +1,126 @@
+#include <Wire.h>
+#include <U8glib.h>
+#include <Adafruit_INA219.h>
+#include <Adafruit_SSD1306.h>
+#include <SPI.h>
+
+U8GLIB_SH1106_128X64 u8g(U8G_I2C_OPT_NONE);
+Adafruit_INA219 ina219;
+#define MOSFET_Pin 13
+
+
+int value = 0;
+unsigned long previousMillis = 0;
+unsigned long interval = 100;
+float Bat_High = 4.3; // Battery High Voltage
+float Bat_Low = 2.9; // Discharge Cut Off Voltage
+float shuntvoltage = 0;
+float busvoltage = 0;
+float current_mA = 0;
+float loadvoltage = 0;
+float energy = 0;
+float Capacity = 0.0;
+unsigned long previousMilliss = 0; // Previous time in ms
+unsigned long millisPassed = 0;
+
+
+void setup() {
+  Serial.begin(9600);
+  ina219.begin();
+  pinMode(MOSFET_Pin, OUTPUT);
+  digitalWrite(MOSFET_Pin, LOW);  
+  
+
+   
+}
+
+
+void ina219values() {
+  millisPassed = millis() - previousMilliss;
+  shuntvoltage = ina219.getShuntVoltage_mV();
+  busvoltage = ina219.getBusVoltage_V();
+  current_mA = ina219.getCurrent_mA();
+  loadvoltage = busvoltage + (shuntvoltage / 1000);
+  Capacity = Capacity + current_mA * (millisPassed / 3600000.0);
+  previousMilliss = millis();
+}
+
+void loop() {
+  ina219values();
+  while(Serial.available())
+    {
+      value = Serial.read();
+    
+    }
+    if (value == '1'){
+          digitalWrite (MOSFET_Pin, HIGH);
+    }
+    else if (value == '0'){
+          digitalWrite (MOSFET_Pin, LOW);
+  }
+  if ( loadvoltage > Bat_High){
+    digitalWrite(MOSFET_Pin, LOW); // Turned Off the MOSFET // No discharge 
+    Serial.println("high");
+    delay(1000);
+   }
+  else if(loadvoltage < Bat_Low){
+    
+    digitalWrite(MOSFET_Pin, LOW); // Turned Off the MOSFET // No discharge 
+    Serial.println("low");
+    delay(1000);
+  }
+  else if(loadvoltage >= Bat_Low && loadvoltage < Bat_High ){
+    
+  unsigned long currentMillis = millis();
+   
+ 
+  if (currentMillis - previousMillis >= interval)
+   {
+      previousMillis = currentMillis;
+      ina219values();
+   }
+  
+  Serial.print(loadvoltage); Serial.print(","); Serial.print(current_mA); Serial.print(","); Serial.println(Capacity);
+  delay(1000);
+ 
+  
+}
+ u8g.firstPage();  
+  do {
+     draw();
+   } while( u8g.nextPage() );
+  
+}
+
+
+
+void draw(void) {
+  u8g.setFont(u8g_font_fub14r); // select font 
+   if ( loadvoltage < 1.5){
+    u8g.setPrintPos(10,40);        // set position
+    u8g.println("No Battery!"); 
+   }
+   else if ( loadvoltage > Bat_High){
+    u8g.setPrintPos(25,40);        // set position
+    u8g.println("High-V!"); 
+   }
+   else if(loadvoltage < Bat_Low){
+    u8g.setPrintPos(25,40);        // set position
+    u8g.println("Low-V!"); 
+   }
+   else if(loadvoltage >= Bat_Low && loadvoltage < Bat_High  ){ 
+     
+   u8g.drawStr(0, 20, "Volt: ");   // put string of display at position X, Y
+   u8g.drawStr(0, 40, "Curr: ");
+   u8g.drawStr(0, 60, "mAh: ");
+   u8g.setPrintPos(58,20);        // set position
+   u8g.print( loadvoltage,2);  // display Battery Voltage in Volt
+   u8g.println("V"); 
+   u8g.setPrintPos(58,40);        // set position
+   u8g.print( current_mA,0);  // display current in mA
+   u8g.println("mA"); 
+   u8g.setPrintPos(58, 60);        // set position
+   u8g.print( Capacity ,1);     // display capacity in mAh
+  
+}
+}
